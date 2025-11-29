@@ -7,6 +7,7 @@ import '../plant/plant_screen.dart';
 import '../location/location_status_screen.dart';
 import '../settings/settings_screen.dart';
 import '../statistics/statistics_screen.dart';
+import '../duel/duel_screen.dart';
 import 'main_home_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -258,6 +259,24 @@ class MenuTab extends StatelessWidget {
                     childAspectRatio: 0.95,
                   ),
                   delegate: SliverChildListDelegate([
+                    _ModernFeatureCard(
+                      icon: Icons.swap_horiz,
+                      title: 'Duello',
+                      gradientColors: [
+                        const Color(0xFF9EB0C7),
+                        const Color(0xFF8FA0B8),
+                      ],
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const DuelScreen(),
+                          ),
+                        );
+                      },
+                    )
+                        .animate()
+                        .fadeIn(duration: 400.ms, delay: 800.ms)
+                        .slideY(begin: 0.1, end: 0, duration: 400.ms),
                   ]),
                 ),
               ),

@@ -14,6 +14,20 @@ class DecisionsListScreen extends StatefulWidget {
 
 class _DecisionsListScreenState extends State<DecisionsListScreen> {
   int _selectedTab = 0; // 0: Genel, 1: Benim oluşturduklarım
+  String? _selectedCategory; // null = Tümü
+
+  final List<Map<String, dynamic>> _categories = [
+    {'name': 'Tümü', 'icon': Icons.apps, 'value': null},
+    {'name': 'Genel', 'icon': Icons.category, 'value': 'Genel'},
+    {'name': 'Kariyer', 'icon': Icons.work, 'value': 'Kariyer'},
+    {'name': 'Eğitim', 'icon': Icons.school, 'value': 'Eğitim'},
+    {'name': 'Finans', 'icon': Icons.attach_money, 'value': 'Finans'},
+    {'name': 'İlişkiler', 'icon': Icons.favorite, 'value': 'İlişkiler'},
+    {'name': 'Sağlık', 'icon': Icons.health_and_safety, 'value': 'Sağlık'},
+    {'name': 'Teknoloji', 'icon': Icons.computer, 'value': 'Teknoloji'},
+    {'name': 'Seyahat', 'icon': Icons.flight, 'value': 'Seyahat'},
+    {'name': 'Diğer', 'icon': Icons.more_horiz, 'value': 'Diğer'},
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +49,63 @@ class _DecisionsListScreenState extends State<DecisionsListScreen> {
       ),
       body: Column(
         children: [
+          // Kategori Filtreleme
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _categories.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final category = _categories[index];
+                  final categoryName = category['name'] as String;
+                  final categoryIcon = category['icon'] as IconData;
+                  final categoryValue = category['value'] as String?;
+                  final isSelected = _selectedCategory == categoryValue;
+                  
+                  return ChoiceChip(
+                    avatar: Icon(
+                      categoryIcon,
+                      size: 18,
+                      color: isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
+                    ),
+                    label: Text(categoryName),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedCategory = categoryValue;
+                      });
+                    },
+                    selectedColor: Theme.of(context).colorScheme.primary,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black87,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                    backgroundColor: Colors.grey[100],
+                    side: isSelected
+                        ? BorderSide.none
+                        : BorderSide(
+                            color: Colors.grey.withValues(alpha: 0.3),
+                          ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  );
+                },
+              ),
+            ),
+          ),
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -82,9 +153,51 @@ class _DecisionsListScreenState extends State<DecisionsListScreen> {
             final allDecisions = snapshot.data ?? [];
             
             // Filtreleme: Genel veya Benim oluşturduklarım
-            final decisions = _selectedTab == 0
+            var decisions = _selectedTab == 0
                 ? allDecisions.where((d) => d.userId != currentUserId).toList()
                 : allDecisions.where((d) => d.userId == currentUserId).toList();
+            
+            // Kategori filtresi
+            if (_selectedCategory != null) {
+              decisions = decisions.where((d) {
+                final category = d.category;
+                // Kategori null veya boşsa "Genel" olarak kabul et
+                final normalizedCategory = (category == null || category.isEmpty) ? 'Genel' : category;
+                final selectedCategory = _selectedCategory!;
+                
+                // Direkt eşleşme (case-sensitive)
+                if (normalizedCategory == selectedCategory) return true;
+                
+                // Case-insensitive eşleşme
+                final categoryLower = normalizedCategory.toLowerCase().trim();
+                final selectedLower = selectedCategory.toLowerCase().trim();
+                
+                if (categoryLower == selectedLower) return true;
+                
+                // İngilizce-Türkçe eşleşmeleri
+                final categoryMap = {
+                  'kariyer': ['career', 'kariyer'],
+                  'eğitim': ['education', 'eğitim'],
+                  'finans': ['finance', 'finans'],
+                  'ilişkiler': ['relationships', 'ilişkiler'],
+                  'sağlık': ['health', 'sağlık'],
+                  'teknoloji': ['technology', 'teknoloji', 'tekno'],
+                  'seyahat': ['travel', 'seyahat'],
+                  'diğer': ['other', 'diğer'],
+                  'genel': ['general', 'genel'],
+                };
+                
+                // Seçilen kategori için tüm varyantları al
+                final baseVariants = categoryMap[selectedLower] ?? [selectedLower];
+                final selectedVariants = List<String>.from(baseVariants);
+                // Seçilen kategoriyi de ekle (eğer yoksa)
+                if (!selectedVariants.contains(selectedLower)) {
+                  selectedVariants.add(selectedLower);
+                }
+                
+                return selectedVariants.contains(categoryLower);
+              }).toList();
+            }
 
             if (decisions.isEmpty) {
               return Center(
@@ -157,6 +270,7 @@ class _DecisionsListScreenState extends State<DecisionsListScreen> {
                 return _ModernVoteCard(
                   decision: decision,
                   colorScheme: colorScheme,
+                  userId: currentUserId,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -288,12 +402,14 @@ class _TabButton extends StatelessWidget {
 class _ModernVoteCard extends StatefulWidget {
   final Decision decision;
   final Map<String, Color> colorScheme;
+  final String? userId;
   final VoidCallback onTap;
   final String Function(DateTime) formatDate;
 
   const _ModernVoteCard({
     required this.decision,
     required this.colorScheme,
+    this.userId,
     required this.onTap,
     required this.formatDate,
   });
@@ -442,6 +558,73 @@ class _ModernVoteCardState extends State<_ModernVoteCard>
                                       ),
                                     ),
                                     const Spacer(),
+                                    
+                                    // Oy durumu bilgisi
+                                    if (widget.userId != null)
+                                      FutureBuilder<bool>(
+                                        future: FirebaseService().hasUserVoted(
+                                          widget.decision.id,
+                                          widget.userId!,
+                                        ),
+                                        builder: (context, voteSnapshot) {
+                                          if (voteSnapshot.connectionState == ConnectionState.waiting) {
+                                            return const SizedBox(
+                                              width: 12,
+                                              height: 12,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            );
+                                          }
+                                          
+                                          final hasVoted = voteSnapshot.data ?? false;
+                                          
+                                          return Container(
+                                            margin: const EdgeInsets.only(right: 8),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: hasVoted
+                                                  ? Colors.green.shade50
+                                                  : Colors.orange.shade50,
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: hasVoted
+                                                    ? Colors.green.shade200
+                                                    : Colors.orange.shade200,
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  hasVoted
+                                                      ? Icons.check_circle
+                                                      : Icons.cancel_outlined,
+                                                  size: 12,
+                                                  color: hasVoted
+                                                      ? Colors.green.shade700
+                                                      : Colors.orange.shade700,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  hasVoted ? 'Verildi' : 'Verilmedi',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: hasVoted
+                                                        ? Colors.green.shade700
+                                                        : Colors.orange.shade700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
                                     
                                     // Oy ver butonu
                                     Container(

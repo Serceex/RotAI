@@ -129,5 +129,10 @@ class DecisionProvider with ChangeNotifier {
     await _firebaseService.createVote(vote);
     await _updateStatistics(decisionId);
   }
+
+  Future<void> removeVote(String decisionId, String userId) async {
+    await _firebaseService.deleteUserVote(decisionId, userId);
+    await _updateStatistics(decisionId);
+  }
 }
 

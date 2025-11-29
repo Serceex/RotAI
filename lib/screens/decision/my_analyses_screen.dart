@@ -5,8 +5,28 @@ import '../../models/decision.dart';
 import '../../services/firebase_service.dart';
 import 'decision_analysis_screen.dart';
 
-class MyAnalysesScreen extends StatelessWidget {
+class MyAnalysesScreen extends StatefulWidget {
   const MyAnalysesScreen({super.key});
+
+  @override
+  State<MyAnalysesScreen> createState() => _MyAnalysesScreenState();
+}
+
+class _MyAnalysesScreenState extends State<MyAnalysesScreen> {
+  String? _selectedCategory; // null = Tümü
+
+  final List<Map<String, dynamic>> _categories = [
+    {'name': 'Tümü', 'icon': Icons.apps, 'value': null},
+    {'name': 'Genel', 'icon': Icons.category, 'value': 'Genel'},
+    {'name': 'Kariyer', 'icon': Icons.work, 'value': 'Kariyer'},
+    {'name': 'Eğitim', 'icon': Icons.school, 'value': 'Eğitim'},
+    {'name': 'Finans', 'icon': Icons.attach_money, 'value': 'Finans'},
+    {'name': 'İlişkiler', 'icon': Icons.favorite, 'value': 'İlişkiler'},
+    {'name': 'Sağlık', 'icon': Icons.health_and_safety, 'value': 'Sağlık'},
+    {'name': 'Teknoloji', 'icon': Icons.computer, 'value': 'Teknoloji'},
+    {'name': 'Seyahat', 'icon': Icons.flight, 'value': 'Seyahat'},
+    {'name': 'Diğer', 'icon': Icons.more_horiz, 'value': 'Diğer'},
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -37,18 +57,78 @@ class MyAnalysesScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
-              Theme.of(context).scaffoldBackgroundColor,
-            ],
+      body: Column(
+        children: [
+          // Kategori Filtreleme
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _categories.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final category = _categories[index];
+                  final categoryName = category['name'] as String;
+                  final categoryIcon = category['icon'] as IconData;
+                  final categoryValue = category['value'] as String?;
+                  final isSelected = _selectedCategory == categoryValue;
+                  
+                  return ChoiceChip(
+                    avatar: Icon(
+                      categoryIcon,
+                      size: 18,
+                      color: isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
+                    ),
+                    label: Text(categoryName),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedCategory = categoryValue;
+                      });
+                    },
+                    selectedColor: Theme.of(context).colorScheme.primary,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black87,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                    backgroundColor: Colors.grey[100],
+                    side: isSelected
+                        ? BorderSide.none
+                        : BorderSide(
+                            color: Colors.grey.withValues(alpha: 0.3),
+                          ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  );
+                },
+              ),
+            ),
           ),
-        ),
-        child: StreamBuilder<List<Decision>>(
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
+                    Theme.of(context).scaffoldBackgroundColor,
+                  ],
+                ),
+              ),
+              child: StreamBuilder<List<Decision>>(
           stream: firebaseService.getDecisions(),
           builder: (context, decisionSnapshot) {
             if (decisionSnapshot.connectionState == ConnectionState.waiting) {
@@ -82,9 +162,51 @@ class MyAnalysesScreen extends StatelessWidget {
 
             // Sadece kullanıcının kendi analizlerini filtrele
             final allDecisions = decisionSnapshot.data ?? [];
-            final myDecisions = allDecisions
+            var myDecisions = allDecisions
                 .where((decision) => decision.userId == currentUser.id)
                 .toList();
+            
+            // Kategori filtresi
+            if (_selectedCategory != null) {
+              myDecisions = myDecisions.where((d) {
+                final category = d.category;
+                // Kategori null veya boşsa "Genel" olarak kabul et
+                final normalizedCategory = (category == null || category.isEmpty) ? 'Genel' : category;
+                final selectedCategory = _selectedCategory!;
+                
+                // Direkt eşleşme (case-sensitive)
+                if (normalizedCategory == selectedCategory) return true;
+                
+                // Case-insensitive eşleşme
+                final categoryLower = normalizedCategory.toLowerCase().trim();
+                final selectedLower = selectedCategory.toLowerCase().trim();
+                
+                if (categoryLower == selectedLower) return true;
+                
+                // İngilizce-Türkçe eşleşmeleri
+                final categoryMap = {
+                  'kariyer': ['career', 'kariyer'],
+                  'eğitim': ['education', 'eğitim'],
+                  'finans': ['finance', 'finans'],
+                  'ilişkiler': ['relationships', 'ilişkiler'],
+                  'sağlık': ['health', 'sağlık'],
+                  'teknoloji': ['technology', 'teknoloji', 'tekno'],
+                  'seyahat': ['travel', 'seyahat'],
+                  'diğer': ['other', 'diğer'],
+                  'genel': ['general', 'genel'],
+                };
+                
+                // Seçilen kategori için tüm varyantları al
+                final baseVariants = categoryMap[selectedLower] ?? [selectedLower];
+                final selectedVariants = List<String>.from(baseVariants);
+                // Seçilen kategoriyi de ekle (eğer yoksa)
+                if (!selectedVariants.contains(selectedLower)) {
+                  selectedVariants.add(selectedLower);
+                }
+                
+                return selectedVariants.contains(categoryLower);
+              }).toList();
+            }
 
             if (myDecisions.isEmpty) {
               return Center(
@@ -268,7 +390,10 @@ class MyAnalysesScreen extends StatelessWidget {
               },
             );
           },
-        ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

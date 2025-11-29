@@ -82,6 +82,17 @@ class FirebaseService {
             .toList());
   }
 
+  Stream<List<Decision>> getDecisionsSubmittedToVote() {
+    return _firestore
+        .collection('decisions')
+        .where('isSubmittedToVote', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Decision.fromMap({...doc.data(), 'id': doc.id}))
+            .toList());
+  }
+
   Future<void> deleteDecision(String decisionId) async {
     if (decisionId.isEmpty) {
       throw Exception('Decision ID boş olamaz');
@@ -140,6 +151,102 @@ class FirebaseService {
     await _firestore.collection('decisions').doc(decisionId).update(updates);
   }
 
+  /// Tüm kararların kategorilerini günceller - null veya geçersiz kategorileri "Genel" yapar
+  Future<int> updateAllDecisionCategories() async {
+    final validCategories = [
+      'Genel',
+      'Kariyer',
+      'Eğitim',
+      'Finans',
+      'İlişkiler',
+      'Sağlık',
+      'Teknoloji',
+      'Seyahat',
+      'Diğer',
+      // İngilizce kategoriler
+      'General',
+      'Career',
+      'Education',
+      'Finance',
+      'Relationships',
+      'Health',
+      'Technology',
+      'Travel',
+      'Other',
+      'Lifestyle',
+    ];
+
+    final decisionsSnapshot = await _firestore.collection('decisions').get();
+    int updatedCount = 0;
+    WriteBatch? batch;
+    int batchCount = 0;
+    const batchLimit = 500;
+
+    for (var doc in decisionsSnapshot.docs) {
+      final data = doc.data();
+      final currentCategory = data['category'] as String?;
+      
+      // Kategori null, boş veya geçersizse "Genel" yap
+      bool needsUpdate = false;
+      String? newCategory = 'Genel';
+
+      if (currentCategory == null || currentCategory.isEmpty) {
+        needsUpdate = true;
+      } else {
+        // Kategori geçerli mi kontrol et (case-insensitive)
+        final categoryLower = currentCategory.toLowerCase().trim();
+        final isValid = validCategories.any((cat) => cat.toLowerCase() == categoryLower);
+        
+        if (!isValid) {
+          needsUpdate = true;
+        } else {
+          // İngilizce kategorileri Türkçe'ye çevir
+          final categoryMap = {
+            'general': 'Genel',
+            'career': 'Kariyer',
+            'education': 'Eğitim',
+            'finance': 'Finans',
+            'relationships': 'İlişkiler',
+            'health': 'Sağlık',
+            'technology': 'Teknoloji',
+            'travel': 'Seyahat',
+            'other': 'Diğer',
+            'lifestyle': 'Yaşam Tarzı',
+          };
+          
+          if (categoryMap.containsKey(categoryLower)) {
+            newCategory = categoryMap[categoryLower];
+            if (currentCategory != newCategory) {
+              needsUpdate = true;
+            }
+          }
+        }
+      }
+
+      if (needsUpdate) {
+        // İlk batch'i oluştur veya yeni batch oluştur
+        if (batch == null || batchCount >= batchLimit) {
+          if (batch != null && batchCount > 0) {
+            await batch.commit();
+          }
+          batch = _firestore.batch();
+          batchCount = 0;
+        }
+        
+        batch.update(doc.reference, {'category': newCategory});
+        batchCount++;
+        updatedCount++;
+      }
+    }
+
+    // Kalan batch'i commit et
+    if (batch != null && batchCount > 0) {
+      await batch.commit();
+    }
+
+    return updatedCount;
+  }
+
   // Vote Operations
   Future<void> createVote(Vote vote) async {
     await _firestore.collection('votes').doc(vote.id).set(vote.toMap());
@@ -182,6 +289,22 @@ class FirebaseService {
     final votes = await _firestore
         .collection('votes')
         .where('decisionRef', isEqualTo: decisionRef)
+        .get();
+    
+    final batch = _firestore.batch();
+    for (var doc in votes.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
+  Future<void> deleteUserVote(String decisionId, String userId) async {
+    final decisionRef = _firestore.collection('decisions').doc(decisionId);
+    final userRef = _firestore.collection('users').doc(userId);
+    final votes = await _firestore
+        .collection('votes')
+        .where('decisionRef', isEqualTo: decisionRef)
+        .where('userRef', isEqualTo: userRef)
         .get();
     
     final batch = _firestore.batch();
