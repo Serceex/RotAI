@@ -60,5 +60,13 @@ class AuthService {
       await _auth.currentUser?.updateDisplayName(user.displayName);
     }
   }
+
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      await _auth.currentUser?.updatePassword(newPassword);
+    } catch (e) {
+      throw Exception('Şifre güncelleme hatası: $e');
+    }
+  }
 }
 

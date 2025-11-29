@@ -8,6 +8,7 @@ import '../location/location_status_screen.dart';
 import '../settings/settings_screen.dart';
 import '../statistics/statistics_screen.dart';
 import '../duel/duel_screen.dart';
+import '../profile/profile_screen.dart';
 import 'main_home_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const MainHomeScreen(),
     const MenuTab(),
     const LocationStatusScreen(),
+    const ProfileScreen(),
     const SettingsScreen(),
   ];
 
@@ -53,6 +55,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.location_on_outlined),
             selectedIcon: Icon(Icons.location_on),
             label: 'Mekan',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profil',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
