@@ -24,7 +24,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = [
     const MainHomeScreen(),
     const MenuTab(),
-    const LocationStatusScreen(),
     const ProfileScreen(),
     const SettingsScreen(),
   ];
@@ -50,11 +49,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.menu_outlined),
             selectedIcon: Icon(Icons.menu),
             label: 'Menü',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.location_on_outlined),
-            selectedIcon: Icon(Icons.location_on),
-            label: 'Mekan',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),

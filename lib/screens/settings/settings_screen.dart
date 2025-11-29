@@ -1,11 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/firebase_service.dart';
 import '../decision/test_api_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _notificationsEnabled = true;
+  bool _shareLocation = false;
+  bool _showEmail = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    _shareLocation = authProvider.currentUser?.shareLocation ?? false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +94,89 @@ class SettingsScreen extends StatelessWidget {
                         },
                       ),
                     ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Gizlilik ve Ayarlar
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.teal.shade400,
+                              Colors.teal.shade600,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.security_outlined,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Gizlilik ve Ayarlar',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _SettingItem(
+                    icon: Icons.notifications_outlined,
+                    title: 'Bildirimler',
+                    subtitle: 'Yeni analiz ve güncellemelerden haberdar ol',
+                    value: _notificationsEnabled,
+                    onChanged: (value) {
+                      setState(() {
+                        _notificationsEnabled = value;
+                      });
+                    },
+                  ),
+                  const Divider(height: 32),
+                  _SettingItem(
+                    icon: Icons.location_on_outlined,
+                    title: 'Konum Paylaşımı',
+                    subtitle: 'Mekan durumu özelliği için konum paylaş',
+                    value: _shareLocation,
+                    onChanged: (value) async {
+                      setState(() {
+                        _shareLocation = value;
+                      });
+                      // Kullanıcı bilgisini güncelle
+                      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                      final currentUser = authProvider.currentUser;
+                      if (currentUser != null) {
+                        final updatedUser = currentUser.copyWith(shareLocation: value);
+                        await authProvider.updateProfile(updatedUser);
+                      }
+                    },
+                  ),
+                  const Divider(height: 32),
+                  _SettingItem(
+                    icon: Icons.visibility_outlined,
+                    title: 'E-posta Görünürlüğü',
+                    subtitle: 'E-postanızı diğer kullanıcılara göster',
+                    value: _showEmail,
+                    onChanged: (value) {
+                      setState(() {
+                        _showEmail = value;
+                      });
+                    },
                   ),
                 ],
               ),
@@ -192,6 +292,67 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SettingItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SettingItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            color: Theme.of(context).colorScheme.primary,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

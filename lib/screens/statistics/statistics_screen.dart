@@ -53,9 +53,9 @@ class StatisticsScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         _StatisticItem(
-                          icon: Icons.help_outline,
-                          label: 'Toplam Karar',
-                          value: '${stats['totalDecisions'] ?? 0}',
+                          icon: Icons.how_to_vote_outlined,
+                          label: 'Oylamadaki Analiz',
+                          value: '${stats['submittedToVote'] ?? 0}',
                           color: Colors.blue,
                         ),
                         const SizedBox(height: 12),
@@ -84,25 +84,34 @@ class StatisticsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // En Popüler Kararlar
+                // Kategori Bazlı İstatistikler
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'En Popüler Kararlar',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.category,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Kategori Bazlı İstatistikler',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
-                        if ((stats['popularDecisions'] as List?)?.isEmpty ?? true)
+                        if ((stats['categoryStats'] as Map?)?.isEmpty ?? true)
                           Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Text(
-                              'Henüz oy verilen karar yok',
+                              'Henüz kategori bazlı veri yok',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: Colors.grey[600],
                                   ),
@@ -110,42 +119,7 @@ class StatisticsScreen extends StatelessWidget {
                             ),
                           )
                         else
-                          ...((stats['popularDecisions'] as List?) ?? []).map<Widget>((decision) {
-                            final decisionData = decision as Map<String, dynamic>;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          decisionData['question'] ?? '',
-                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${decisionData['voteCount'] ?? 0} oy',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                color: Colors.grey[600],
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.trending_up,
-                                    color: Colors.green,
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
+                          ..._buildCategoryStats(context, stats['categoryStats'] as Map<String, dynamic>? ?? {}),
                       ],
                     ),
                   ),
@@ -180,6 +154,11 @@ class StatisticsScreen extends StatelessWidget {
     final decisionsSnapshot = await firestore.collection('decisions').get();
     final totalDecisions = decisionsSnapshot.docs.length;
 
+    // Oylamaya sunulan analiz sayısı (isSubmittedToVote: true olan kararlar)
+    final submittedToVote = decisionsSnapshot.docs
+        .where((doc) => doc.data()['isSubmittedToVote'] == true)
+        .length;
+
     // Toplam oy sayısı
     final votesSnapshot = await firestore.collection('votes').get();
     final totalVotes = votesSnapshot.docs.length;
@@ -193,46 +172,222 @@ class StatisticsScreen extends StatelessWidget {
         .where((doc) => doc.data()['decisionTree'] != null)
         .length;
 
-    // En popüler kararlar (en çok oy alan 5 karar)
-    final decisionVoteCounts = <String, int>{};
-    for (var voteDoc in votesSnapshot.docs) {
-      // Get decisionId from decisionRef DocumentReference
-      final voteData = voteDoc.data();
-      final decisionRef = voteData['decisionRef'] as DocumentReference?;
-      final decisionId = decisionRef?.id;
-      if (decisionId != null) {
-        decisionVoteCounts[decisionId] =
-            (decisionVoteCounts[decisionId] ?? 0) + 1;
-      }
+    // Kategori bazlı istatistikler
+    final categoryStats = <String, Map<String, dynamic>>{};
+    
+    // Kategori tanımları
+    final categories = [
+      'Genel',
+      'Kariyer',
+      'Eğitim',
+      'Finans',
+      'İlişkiler',
+      'Sağlık',
+      'Teknoloji',
+      'Seyahat',
+      'Diğer',
+    ];
+    
+    // Her kategori için istatistik hesapla
+    for (final category in categories) {
+      final categoryDecisions = decisionsSnapshot.docs.where((doc) {
+        final docCategory = doc.data()['category'] as String?;
+        final normalizedCategory = (docCategory == null || docCategory.isEmpty) ? 'Genel' : docCategory;
+        return normalizedCategory == category;
+      }).toList();
+      
+      final categoryDecisionIds = categoryDecisions.map((doc) => doc.id).toSet();
+      final categoryVotes = votesSnapshot.docs.where((voteDoc) {
+        final voteData = voteDoc.data();
+        final decisionRef = voteData['decisionRef'] as DocumentReference?;
+        final decisionId = decisionRef?.id;
+        return decisionId != null && categoryDecisionIds.contains(decisionId);
+      }).length;
+      
+      // Oylamaya sunulan analiz sayısı (isSubmittedToVote: true olan kararlar)
+      final categorySubmittedToVote = categoryDecisions
+          .where((doc) => doc.data()['isSubmittedToVote'] == true)
+          .length;
+      
+      categoryStats[category] = {
+        'decisions': categoryDecisions.length,
+        'submittedToVote': categorySubmittedToVote,
+        'votes': categoryVotes,
+        'analyses': categoryDecisions.where((doc) => doc.data()['decisionTree'] != null).length,
+      };
     }
-
-    final popularDecisions = <Map<String, dynamic>>[];
-    for (var decisionDoc in decisionsSnapshot.docs) {
-      final decisionId = decisionDoc.id;
-      final voteCount = decisionVoteCounts[decisionId] ?? 0;
-      if (voteCount > 0) {
-        final decisionData = decisionDoc.data();
-        popularDecisions.add({
-          'id': decisionId,
-          'question': decisionData['question'] ?? '',
-          'voteCount': voteCount,
-        });
-      }
-    }
-
-    // Oy sayısına göre sırala
-    popularDecisions.sort((a, b) => (b['voteCount'] as int).compareTo(a['voteCount'] as int));
-
-    // İlk 5'i al
-    final top5Decisions = popularDecisions.take(5).toList();
 
     return {
       'totalDecisions': totalDecisions,
+      'submittedToVote': submittedToVote,
       'totalVotes': totalVotes,
       'totalUsers': totalUsers,
       'totalAnalyses': totalAnalyses,
-      'popularDecisions': top5Decisions,
+      'categoryStats': categoryStats,
     };
+  }
+
+  List<Widget> _buildCategoryStats(BuildContext context, Map<String, dynamic> categoryStats) {
+    final categories = [
+      {'name': 'Genel', 'icon': Icons.category, 'color': Colors.grey},
+      {'name': 'Kariyer', 'icon': Icons.work, 'color': Colors.blue},
+      {'name': 'Eğitim', 'icon': Icons.school, 'color': Colors.green},
+      {'name': 'Finans', 'icon': Icons.attach_money, 'color': Colors.orange},
+      {'name': 'İlişkiler', 'icon': Icons.favorite, 'color': Colors.pink},
+      {'name': 'Sağlık', 'icon': Icons.health_and_safety, 'color': Colors.red},
+      {'name': 'Teknoloji', 'icon': Icons.computer, 'color': Colors.purple},
+      {'name': 'Seyahat', 'icon': Icons.flight, 'color': Colors.teal},
+      {'name': 'Diğer', 'icon': Icons.more_horiz, 'color': Colors.brown},
+    ];
+
+    return categories.map<Widget>((categoryInfo) {
+      final categoryName = categoryInfo['name'] as String;
+      final categoryIcon = categoryInfo['icon'] as IconData;
+      final categoryColor = categoryInfo['color'] as Color;
+      
+      final stats = categoryStats[categoryName] as Map<String, dynamic>? ?? {};
+      final submittedToVote = stats['submittedToVote'] ?? 0;
+      final votes = stats['votes'] ?? 0;
+      final analyses = stats['analyses'] ?? 0;
+      
+      // Toplam oylamaya sunulan analiz sayısını hesapla (yüzde için)
+      final totalSubmittedToVote = categoryStats.values
+          .map((s) => (s as Map)['submittedToVote'] ?? 0)
+          .fold<int>(0, (sum, count) => sum + (count as int));
+      
+      final percentage = totalSubmittedToVote > 0 ? (submittedToVote / totalSubmittedToVote * 100) : 0.0;
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: categoryColor.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: categoryColor.withValues(alpha: 0.2),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: categoryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    categoryIcon,
+                    color: categoryColor,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    categoryName,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: categoryColor,
+                        ),
+                  ),
+                ),
+                Text(
+                  '${percentage.toStringAsFixed(1)}%',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: categoryColor,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _CategoryStatItem(
+                    icon: Icons.how_to_vote_outlined,
+                    label: 'Oylamadaki\nAnaliz',
+                    value: '$submittedToVote',
+                    color: categoryColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _CategoryStatItem(
+                    icon: Icons.how_to_vote,
+                    label: 'Oy',
+                    value: '$votes',
+                    color: categoryColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _CategoryStatItem(
+                    icon: Icons.analytics_outlined,
+                    label: 'Analiz',
+                    value: '$analyses',
+                    color: categoryColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }).toList();
+  }
+}
+
+class _CategoryStatItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _CategoryStatItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: color.withValues(alpha: 0.7),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[600],
+                    fontSize: 11,
+                  ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+                fontSize: 18,
+              ),
+        ),
+      ],
+    );
   }
 }
 

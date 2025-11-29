@@ -76,6 +76,11 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     final decisionsSnapshot = await firestore.collection('decisions').get();
     final totalDecisions = decisionsSnapshot.docs.length;
 
+    // Oylamaya sunulan analiz sayısı (isSubmittedToVote: true olan kararlar)
+    final submittedToVote = decisionsSnapshot.docs
+        .where((doc) => doc.data()['isSubmittedToVote'] == true)
+        .length;
+
     // Toplam oy sayısı
     final votesSnapshot = await firestore.collection('votes').get();
     final totalVotes = votesSnapshot.docs.length;
@@ -97,6 +102,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
     return {
       'totalDecisions': totalDecisions,
+      'submittedToVote': submittedToVote,
       'totalVotes': totalVotes,
       'totalUsers': totalUsers,
       'todayVotes': todayVotes,
@@ -788,9 +794,9 @@ class _StatisticsTicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       _StatisticItem(
-        icon: Icons.help_outline,
-        label: 'Toplam Soru',
-        value: '${statistics['totalDecisions'] ?? 0}',
+        icon: Icons.how_to_vote_outlined,
+        label: 'Oylamadaki Analiz',
+        value: '${statistics['submittedToVote'] ?? 0}',
         color: Colors.blue.shade400,
       ),
       _StatisticItem(
