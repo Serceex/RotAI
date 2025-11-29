@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "880057845074",
+    "project_id": "kolektif-akil-platform",
+    "storage_bucket": "kolektif-akil-platform.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:880057845074:android:24026d3661a7332687668b",
+        "android_client_info": {
+          "package_name": "com.kolektifakil.kolektif_akil_platform"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDDgnKOscMq3WFK_vqgVLAR6FPEGZqGG1c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
