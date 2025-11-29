@@ -545,6 +545,42 @@ class _DecisionResultScreenState extends State<DecisionResultScreen> {
     _decisionId = widget.decision.id.isNotEmpty ? widget.decision.id : null;
   }
 
+  /// Analysis metninden JSON formatını temizler, sadece metin kısmını döndürür
+  String _cleanAnalysisText(String analysis) {
+    if (analysis.isEmpty) return analysis;
+    
+    // JSON formatını temizle
+    String cleaned = analysis;
+    
+    // Eğer JSON objesi içeriyorsa, sadece analysis kısmını al
+    if (cleaned.contains('"analysis"') || cleaned.contains("'analysis'")) {
+      // JSON'dan analysis değerini çıkar (çift tırnak)
+      final analysisPattern1 = RegExp(r'"analysis"\s*:\s*"([^"]+)"', caseSensitive: false);
+      final match1 = analysisPattern1.firstMatch(cleaned);
+      if (match1 != null && match1.group(1) != null) {
+        return match1.group(1)!;
+      }
+      // JSON'dan analysis değerini çıkar (tek tırnak)
+      final analysisPattern2 = RegExp(r"'analysis'\s*:\s*'([^']+)'", caseSensitive: false);
+      final match2 = analysisPattern2.firstMatch(cleaned);
+      if (match2 != null && match2.group(1) != null) {
+        return match2.group(1)!;
+      }
+    }
+    
+    // Markdown code block'ları temizle
+    cleaned = cleaned.replaceAll(RegExp(r'```json\s*'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'```\s*'), '');
+    
+    // JSON objelerini temizle (basit yaklaşım)
+    cleaned = cleaned.replaceAll(RegExp(r'\{[^{}]*"analysis"[^{}]*\}'), '');
+    
+    // Fazla boşlukları temizle
+    cleaned = cleaned.trim();
+    
+    return cleaned.isEmpty ? analysis : cleaned;
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentDecisionId = _decisionId ?? widget.decision.id;
@@ -559,12 +595,112 @@ class _DecisionResultScreenState extends State<DecisionResultScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          bottom: const TabBar(
+          actions: [
+            // Topluluk Oylamasına Sun/Kaldır Butonu - Sabit
+            StreamBuilder<Decision?>(
+              stream: currentDecisionId.isNotEmpty 
+                  ? _firebaseService.getDecisionStream(currentDecisionId)
+                  : Stream.value(null),
+              builder: (context, decisionSnapshot) {
+                final decision = decisionSnapshot.data ?? widget.decision;
+                final isSubmittedToVote = decision.isSubmittedToVote;
+                String decisionId;
+                if (decisionSnapshot.data != null && decisionSnapshot.data!.id.isNotEmpty) {
+                  decisionId = decisionSnapshot.data!.id;
+                } else if (currentDecisionId.isNotEmpty) {
+                  decisionId = currentDecisionId;
+                } else {
+                  decisionId = widget.decision.id;
+                }
+                
+                if (decisionId.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Consumer<DecisionProvider>(
+                    builder: (context, decisionProvider, child) {
+                      return ElevatedButton.icon(
+                        onPressed: () async {
+                          try {
+                            await decisionProvider.toggleVoteSubmission(
+                              decisionId,
+                              !isSubmittedToVote,
+                            );
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    isSubmittedToVote
+                                        ? 'Oylamadan kaldırıldı ve tüm oylar silindi'
+                                        : 'Oylamaya sunuldu',
+                                  ),
+                                  backgroundColor: isSubmittedToVote ? Colors.orange : Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Hata: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: Icon(
+                          isSubmittedToVote ? Icons.remove_circle_outline : Icons.how_to_vote,
+                          size: 18,
+                        ),
+                        label: Text(
+                          isSubmittedToVote ? 'Kaldır' : 'Oylamaya Sun',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isSubmittedToVote 
+                              ? Colors.orange.withValues(alpha: 0.1) 
+                              : Theme.of(context).colorScheme.primary,
+                          foregroundColor: isSubmittedToVote ? Colors.orange : Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: isSubmittedToVote ? Colors.orange : Colors.transparent,
+                              width: 1.5,
+                            ),
+                          ),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ],
+          bottom: TabBar(
             tabs: [
-              Tab(text: 'Analiz'),
-              Tab(text: 'Riskler ve Faydalar'),
-              Tab(text: 'Uzman Görüşü'),
+              Tab(
+                icon: const Icon(Icons.analytics, size: 18),
+                text: 'Analiz',
+                height: 48,
+              ),
+              Tab(
+                icon: const Icon(Icons.warning_amber_rounded, size: 18),
+                text: 'Riskler ve Faydalar',
+                height: 48,
+              ),
+              Tab(
+                icon: const Icon(Icons.comment_outlined, size: 18),
+                text: 'Uzman Görüşü',
+                height: 48,
+              ),
             ],
+            labelStyle: const TextStyle(fontSize: 11),
+            unselectedLabelStyle: const TextStyle(fontSize: 11),
           ),
         ),
         body: TabBarView(
@@ -588,6 +724,8 @@ class _DecisionResultScreenState extends State<DecisionResultScreen> {
                     ? _firebaseService.getDecisionStream(currentDecisionId)
                     : Stream.value(null),
                 builder: (context, decisionSnapshot) {
+                  final decision = decisionSnapshot.data ?? widget.decision;
+                  
                   return SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -636,7 +774,7 @@ class _DecisionResultScreenState extends State<DecisionResultScreen> {
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                widget.decision.question,
+                                decision.question,
                                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                       fontSize: 16,
                                       height: 1.6,
@@ -649,9 +787,80 @@ class _DecisionResultScreenState extends State<DecisionResultScreen> {
                             .animate()
                             .fadeIn(duration: 500.ms)
                             .slideY(begin: 0.1, end: 0),
-                        if (widget.decision.decisionTree != null) ...[
+                        // AI Analiz Bloğu
+                        if (decision.decisionTree != null && decision.decisionTree!.analysis.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.purple[50]!,
+                                  Colors.purple[100]!.withValues(alpha: 0.5),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.purple[300]!.withValues(alpha: 0.3),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.purple.withValues(alpha: 0.1),
+                                  blurRadius: 15,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple[400]!.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        Icons.psychology_rounded,
+                                        color: Colors.purple[700],
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'AI Analiz',
+                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.purple[700],
+                                            fontSize: 20,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  _cleanAnalysisText(decision.decisionTree!.analysis),
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: Colors.grey[800],
+                                        height: 1.6,
+                                        fontSize: 15,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          )
+                              .animate()
+                              .fadeIn(duration: 500.ms, delay: 200.ms)
+                              .slideY(begin: 0.1, end: 0),
+                        ],
+                        if (decision.decisionTree != null) ...[
                           const SizedBox(height: 16),
-                          DecisionTreeWidget(tree: widget.decision.decisionTree!),
+                          DecisionTreeWidget(tree: decision.decisionTree!),
                         ],
                       ],
                     ),

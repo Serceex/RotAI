@@ -72,11 +72,26 @@ class DecisionProvider with ChangeNotifier {
       createdAt: decision.createdAt,
       updatedAt: decision.updatedAt,
       isSubmittedToVote: true, // Oylamaya sunuldu olarak işaretle
+      category: decision.category,
     );
     final decisionId = await _firebaseService.createDecision(decisionToSave);
     _currentDecision = decisionToSave;
     notifyListeners();
     return decisionId;
+  }
+
+  Future<void> toggleVoteSubmission(String decisionId, bool submitToVote) async {
+    await _firebaseService.updateDecision(decisionId, {
+      'isSubmittedToVote': submitToVote,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    
+    // Eğer oylamadan kaldırılıyorsa, tüm oyları sil
+    if (!submitToVote) {
+      await _firebaseService.deleteVotesForDecision(decisionId);
+    }
+    
+    notifyListeners();
   }
 
   Future<void> loadVotes(String decisionId) async {
