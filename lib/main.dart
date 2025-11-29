@@ -7,6 +7,7 @@ import 'providers/auth_provider.dart';
 import 'providers/decision_provider.dart';
 import 'providers/plant_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/achievement_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -77,6 +78,7 @@ class MyApp extends StatelessWidget {
               previous ?? DecisionProvider(geminiApiKey: ApiConfig.geminiApiKey),
         ),
         ChangeNotifierProvider(create: (_) => PlantProvider()),
+        ChangeNotifierProvider(create: (_) => AchievementProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

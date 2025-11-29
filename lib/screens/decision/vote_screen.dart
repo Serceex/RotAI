@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../providers/decision_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/achievement_provider.dart';
 import '../../models/decision.dart';
 import '../../models/vote.dart';
 import '../../services/firebase_service.dart';
@@ -100,10 +101,36 @@ class _VoteScreenState extends State<VoteScreen> {
         _hasVoted = true;
       });
 
+      // Rozet kontrolü
+      if (user != null) {
+        final achievementProvider = Provider.of<AchievementProvider>(context, listen: false);
+        final unlockedAchievements = await achievementProvider.checkVoteAchievements(user.id);
+        
+        if (unlockedAchievements.isNotEmpty && mounted) {
+          // Rozet kazanıldı bildirimi göster
+          for (var achievement in unlockedAchievements) {
+            _showAchievementDialog(achievement);
+          }
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Oyunuz kaydedildi!')),
         );
+      }
+
+      // Rozet kontrolü
+      if (user != null) {
+        final achievementProvider = Provider.of<AchievementProvider>(context, listen: false);
+        final unlockedAchievements = await achievementProvider.checkVoteAchievements(user.id);
+        
+        if (unlockedAchievements.isNotEmpty && mounted) {
+          // Rozet kazanıldı bildirimi göster
+          for (var achievement in unlockedAchievements) {
+            _showAchievementDialog(achievement);
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -807,6 +834,89 @@ class _VoteScreenState extends State<VoteScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showAchievementDialog(dynamic achievement) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    achievement.type.color,
+                    achievement.type.color.withValues(alpha: 0.8),
+                  ],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: achievement.type.color.withValues(alpha: 0.4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  achievement.type.icon,
+                  style: const TextStyle(fontSize: 40),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '🎉 Rozet Kazandınız!',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              achievement.type.name,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                    color: achievement.type.color,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              achievement.type.description,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: achievement.type.color,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text('Harika!'),
+          ),
+        ],
       ),
     );
   }

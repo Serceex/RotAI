@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../providers/decision_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/achievement_provider.dart';
 import '../../models/decision.dart';
 import '../../services/firebase_service.dart';
 import 'decision_tree_widget.dart';
@@ -87,10 +88,17 @@ class _DecisionAnalysisScreenState extends State<DecisionAnalysisScreen> {
         userId: userId,
       );
 
+      // Rozet kontrolü
+      final achievementProvider = Provider.of<AchievementProvider>(context, listen: false);
+      final unlockedAchievements = await achievementProvider.checkAnalysisAchievements(userId);
+
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => DecisionResultScreen(decision: decision),
+            builder: (_) => DecisionResultScreen(
+              decision: decision,
+              unlockedAchievements: unlockedAchievements,
+            ),
           ),
         );
       }
@@ -524,8 +532,13 @@ class _InfoItem extends StatelessWidget {
 
 class DecisionResultScreen extends StatefulWidget {
   final Decision decision;
+  final List<dynamic> unlockedAchievements;
 
-  const DecisionResultScreen({super.key, required this.decision});
+  const DecisionResultScreen({
+    super.key,
+    required this.decision,
+    this.unlockedAchievements = const [],
+  });
 
   @override
   State<DecisionResultScreen> createState() => _DecisionResultScreenState();
@@ -539,6 +552,15 @@ class _DecisionResultScreenState extends State<DecisionResultScreen> {
   void initState() {
     super.initState();
     _decisionId = widget.decision.id.isNotEmpty ? widget.decision.id : null;
+    
+    // Rozet kazanıldı bildirimi göster
+    if (widget.unlockedAchievements.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (var achievement in widget.unlockedAchievements) {
+          _showAchievementDialog(achievement);
+        }
+      });
+    }
   }
 
   /// Analysis metninden JSON formatını temizler, sadece metin kısmını döndürür
@@ -1072,6 +1094,98 @@ class _DecisionResultScreenState extends State<DecisionResultScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showAchievementDialog(dynamic achievement) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    achievement.type.color,
+                    achievement.type.color.withValues(alpha: 0.8),
+                  ],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: achievement.type.color.withValues(alpha: 0.4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  achievement.type.icon,
+                  style: const TextStyle(fontSize: 40),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '🎉 Rozet Kazandınız!',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              achievement.type.name,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                    color: achievement.type.color,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              achievement.type.description,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+            if (achievement.category != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Kategori: ${achievement.category}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[500],
+                    ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: achievement.type.color,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text('Harika!'),
+          ),
+        ],
       ),
     );
   }

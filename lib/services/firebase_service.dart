@@ -5,6 +5,7 @@ import '../models/vote.dart';
 import '../models/location_status.dart';
 import '../models/virtual_plant.dart';
 import '../models/user_model.dart';
+import '../models/achievement.dart';
 
 class FirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -469,6 +470,68 @@ class FirebaseService {
 
   Future<void> updateUser(AppUser user) async {
     await _firestore.collection('users').doc(user.id).update(user.toMap());
+  }
+
+  // Achievement Operations
+  Future<void> createAchievement(String userId, AchievementType type, {String? category}) async {
+    // Aynı achievement'ın daha önce kazanılıp kazanılmadığını kontrol et
+    final existingQuery = await _firestore
+        .collection('achievements')
+        .where('userId', isEqualTo: userId)
+        .where('type', isEqualTo: type.toString())
+        .limit(1)
+        .get();
+
+    if (existingQuery.docs.isNotEmpty) {
+      // Zaten kazanılmış, tekrar oluşturma
+      return;
+    }
+
+    final achievement = {
+      'userId': userId,
+      'type': type.toString(),
+      'category': category,
+      'unlockedAt': DateTime.now().toIso8601String(),
+    };
+
+    await _firestore.collection('achievements').add(achievement);
+  }
+
+  Future<List<Achievement>> getUserAchievements(String userId) async {
+    final snapshot = await _firestore
+        .collection('achievements')
+        .where('userId', isEqualTo: userId)
+        .orderBy('unlockedAt', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => Achievement.fromMap({...doc.data(), 'id': doc.id}))
+        .toList();
+  }
+
+  Stream<List<Achievement>> getUserAchievementsStream(String userId) {
+    return _firestore
+        .collection('achievements')
+        .where('userId', isEqualTo: userId)
+        .orderBy('unlockedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Achievement.fromMap({...doc.data(), 'id': doc.id}))
+            .toList());
+  }
+
+  Future<bool> hasAchievement(String userId, AchievementType type, {String? category}) async {
+    final query = _firestore
+        .collection('achievements')
+        .where('userId', isEqualTo: userId)
+        .where('type', isEqualTo: type.toString());
+
+    if (category != null) {
+      query.where('category', isEqualTo: category);
+    }
+
+    final snapshot = await query.limit(1).get();
+    return snapshot.docs.isNotEmpty;
   }
 }
 
