@@ -20,14 +20,18 @@ class MainHomeScreen extends StatefulWidget {
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
   final ScrollController _scrollController = ScrollController();
+  final PageController _categoryPageController = PageController(viewportFraction: 0.5);
   Timer? _scrollTimer;
   Map<String, dynamic> _statistics = {};
   bool _isLoadingStats = true;
+  List<Map<String, dynamic>> _popularCategories = [];
+  bool _isLoadingCategories = true;
 
   @override
   void initState() {
     super.initState();
     _loadStatistics();
+    _loadPopularCategories();
     _startAutoScroll();
   }
 
@@ -35,6 +39,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   void dispose() {
     _scrollTimer?.cancel();
     _scrollController.dispose();
+    _categoryPageController.dispose();
     super.dispose();
   }
 
@@ -46,6 +51,56 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         _isLoadingStats = false;
       });
     }
+  }
+
+  Future<void> _loadPopularCategories() async {
+    final categories = await _calculatePopularCategories();
+    if (mounted) {
+      setState(() {
+        _popularCategories = categories;
+        _isLoadingCategories = false;
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _calculatePopularCategories() async {
+    final firestore = FirebaseFirestore.instance;
+    
+    // Tüm kategoriler
+    final allCategories = [
+      {'name': 'Genel', 'icon': Icons.category, 'color': Colors.blue},
+      {'name': 'Kariyer', 'icon': Icons.work, 'color': Colors.orange},
+      {'name': 'Eğitim', 'icon': Icons.school, 'color': Colors.purple},
+      {'name': 'Finans', 'icon': Icons.attach_money, 'color': Colors.green},
+      {'name': 'İlişkiler', 'icon': Icons.favorite, 'color': Colors.pink},
+      {'name': 'Sağlık', 'icon': Icons.health_and_safety, 'color': Colors.red},
+      {'name': 'Teknoloji', 'icon': Icons.computer, 'color': Colors.cyan},
+      {'name': 'Seyahat', 'icon': Icons.flight, 'color': Colors.indigo},
+      {'name': 'Diğer', 'icon': Icons.more_horiz, 'color': Colors.grey},
+    ];
+
+    // Her kategori için karar sayısını hesapla
+    final decisionsSnapshot = await firestore.collection('decisions').get();
+    final categoryCounts = <String, int>{};
+
+    for (final doc in decisionsSnapshot.docs) {
+      final category = doc.data()['category'] as String? ?? 'Genel';
+      categoryCounts[category] = (categoryCounts[category] ?? 0) + 1;
+    }
+
+    // Kategorileri karar sayısına göre sırala
+    final categoriesWithCount = allCategories.map((cat) {
+      final count = categoryCounts[cat['name']] ?? 0;
+      return {
+        ...cat,
+        'count': count,
+      };
+    }).toList();
+
+    categoriesWithCount.sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+    
+    // En popüler 6 kategoriyi al
+    return categoriesWithCount.take(6).toList();
   }
 
   void _startAutoScroll() {
@@ -267,6 +322,77 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 28),
+            // Popüler Kategoriler Carousel
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.local_fire_department,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Popüler Kategoriler',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        letterSpacing: -0.5,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _isLoadingCategories
+                ? const SizedBox(
+                    height: 180,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : _popularCategories.isEmpty
+                    ? const SizedBox.shrink()
+                    : Column(
+                        children: [
+                          SizedBox(
+                            height: 180,
+                            child: PageView.builder(
+                              controller: _categoryPageController,
+                              itemCount: _popularCategories.length,
+                              itemBuilder: (context, index) {
+                                final category = _popularCategories[index];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                                  child: _CategoryCard(
+                                    category: category,
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => DecisionsListScreen(
+                                            initialCategory: category['name'],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          if (_popularCategories.length > 1) ...[
+                            const SizedBox(height: 12),
+                            _CategoryPageIndicator(
+                              pageController: _categoryPageController,
+                              itemCount: _popularCategories.length,
+                            ),
+                          ],
+                        ],
+                      ),
             const SizedBox(height: 28),
             // Bildirimler/Duyurular
             Row(
@@ -1011,6 +1137,184 @@ class _AnimatedGreetingIcon extends StatelessWidget {
           .slideY(begin: 0, end: -0.1, duration: 1000.ms, curve: Curves.easeInOut)
           .then()
           .slideY(begin: -0.1, end: 0, duration: 1000.ms, curve: Curves.easeInOut),
+    );
+  }
+}
+
+class _CategoryCard extends StatelessWidget {
+  final Map<String, dynamic> category;
+  final VoidCallback onTap;
+
+  const _CategoryCard({
+    required this.category,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final categoryColor = category['color'] as Color;
+    final categoryName = category['name'] as String;
+    final categoryIcon = category['icon'] as IconData;
+    final categoryCount = category['count'] as int;
+
+    return Container(
+      constraints: const BoxConstraints(
+        minWidth: 0,
+        maxWidth: double.infinity,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            categoryColor,
+            categoryColor.withValues(alpha: 0.7),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: categoryColor.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    categoryIcon,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  categoryName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.article_outlined,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$categoryCount analiz',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryPageIndicator extends StatefulWidget {
+  final PageController pageController;
+  final int itemCount;
+
+  const _CategoryPageIndicator({
+    required this.pageController,
+    required this.itemCount,
+  });
+
+  @override
+  State<_CategoryPageIndicator> createState() => _CategoryPageIndicatorState();
+}
+
+class _CategoryPageIndicatorState extends State<_CategoryPageIndicator> {
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.pageController.addListener(_onPageChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.pageController.removeListener(_onPageChanged);
+    super.dispose();
+  }
+
+  void _onPageChanged() {
+    if (widget.pageController.page != null) {
+      setState(() {
+        _currentPage = widget.pageController.page!.round();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        widget.itemCount,
+        (index) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: _currentPage == index ? 24 : 8,
+          height: 8,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            color: _currentPage == index
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
     );
   }
 }

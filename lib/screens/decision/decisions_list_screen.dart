@@ -6,7 +6,9 @@ import '../../providers/auth_provider.dart';
 import 'vote_screen.dart';
 
 class DecisionsListScreen extends StatefulWidget {
-  const DecisionsListScreen({super.key});
+  final String? initialCategory;
+  
+  const DecisionsListScreen({super.key, this.initialCategory});
 
   @override
   State<DecisionsListScreen> createState() => _DecisionsListScreenState();
@@ -14,8 +16,14 @@ class DecisionsListScreen extends StatefulWidget {
 
 class _DecisionsListScreenState extends State<DecisionsListScreen> {
   int _selectedTab = 0; // 0: Genel, 1: Benim oluşturduklarım
-  String? _selectedCategory; // null = Tümü
+  late String? _selectedCategory; // null = Tümü
   String? _selectedVoteStatus; // null = Tümü, 'voted' = Verildi, 'not_voted' = Verilmedi
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCategory = widget.initialCategory;
+  }
 
   final List<Map<String, dynamic>> _categories = [
     {'name': 'Tümü', 'icon': Icons.apps, 'value': null},
